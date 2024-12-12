@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text Visualizer with Overlay Navigation</title>
+    <style>
+        @font-face {
+            font-family: 'Suisse Intl';
+            src: url('fonts/SuisseIntl-Regular.otf') format('opentype');
+            font-weight: normal;
+            font-style: normal;
+        }
+        body, html { 
+            margin: 0; 
+            padding: 0;
+            height: 100%;
+            font-family: 'Suisse Intl', Arial, sans-serif;
+            overflow-x: hidden;
+            overflow-y: auto;
+
+        }
+        #wrapper {
+            position: relative;
+            min-height: 100vh;
+        }
+        nav {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 3;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background-color: rgba(255, 255, 255, 0.5);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+        }
+        #topImage {
+            height: 2rem;
+            width: auto;
+        }
+        .nav-arrows {
+            display: flex;
+            gap: 1rem;
+        }
+        .nav-arrow {
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            user-select: none;
+            transition: transform 0.2s ease;
+        }
+        .nav-arrow:hover {
+        transform: scale(1.1);
+        }
+
+        .nav-arrow:active {
+            transform: scale(0.95);
+        }
+        main {
+            position: relative;
+            z-index: 2;
+            padding-top: 4rem; /* Adjust based on nav height */
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: calc(100vh - 4rem);
+
+        }
+        canvas { 
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        #textContainer {
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 2rem 1rem;
+            color: rgba(0, 0, 0, 0.7);
+            font-size: 1.1rem;
+            line-height: 1.6;
+            max-width: 640px;
+            width: 100%;
+            transition: height 0.3s ease;
+        }
+        #textContent {
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        #textContainer p {
+            margin: 0 0 1em 0;
+            padding: 0;
+        }
+
+        @media (max-width: 768px) {
+            main {
+                grid-template-columns: 1rem minmax(auto, calc(100% - 2rem)) 1rem;
+            }
+            #textContainer {
+                margin: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="wrapper">
+        <canvas id="visualizer"></canvas>
+        <nav>
+            <a href="https://linktr.ee/late_arrivals" target="_blank">
+                <img id="topImage" src="images/logo-horizontal-black-clear.png" alt="Late Arrivals">
+            </a>
+            <div class="nav-arrows">
+                <img src="images/arrow-left.svg" alt="Previous" class="nav-arrow" id="prevApp">
+                <img src="images/arrow-right.svg" alt="Next" class="nav-arrow" id="nextApp">
+            </div>
+        </nav>
+        <main>
+            <div id="textContainer">
+                <div id="textContent"></div>
+            </div>
+        </main>
+    </div>
+    <script>
+
+        // App cycling functionality
+    const apps = [
+        { name: 'index', path: './index.html' },
+        { name: 'circle scatter', path: './circle-scatter.html' },
+        // Add more apps here as needed
+    ];
+
+    let currentAppIndex = 0;
+
+    function updateApp(direction) {
+        currentAppIndex = (currentAppIndex + direction + apps.length) % apps.length;
+        const nextApp = apps[currentAppIndex];
+        window.location.href = nextApp.path;
+    }
+
+    document.getElementById('prevApp').addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent ripple effect
+        updateApp(-1);
+    });
+    document.getElementById('nextApp').addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent ripple effect
+        updateApp(1);
+    });
+
+    // Determine current app and set currentAppIndex
+    const currentPath = window.location.pathname.split('/').pop() || 'index.html';
+    currentAppIndex = apps.findIndex(app => app.path.includes(currentPath));
+    if (currentAppIndex === -1) currentAppIndex = 0;
+
+
+    // Load saved state if any
+    /*
+    window.addEventListener('load', () => {
+        const savedState = localStorage.getItem('appState');
+        if (savedState) {
+            const state = JSON.parse(savedState);
+            // Apply saved state here
+            if (state.blendMode) document.getElementById('blendMode').value = state.blendMode;
+            if (state.opacity) document.getElementById('opacity').value = state.opacity;
+            // Trigger any necessary updates based on these values
+        }
+    });
+    */
+
+        const canvas = document.getElementById('visualizer');
+        const ctx = canvas.getContext('2d');
+        const textContainer = document.getElementById('textContainer');
+        let width, height;
+        let shapes = [];
+        let ripples = [];
+        let explosions = [];
+        let destroyedCount = 0;
+        const SHAPE_COUNT = 100;
+        const MUTED_GREEN_COLORS = ['#4a6741', '#5a7a4e', '#6b8e5c', '#7ca26a', '#8db678'];
+        const SHAPE_TYPES = ['circle', 'square', 'triangle', 'pentagon', 'hexagon'];
+
+        const TEXT = "Nobody knows or cares who invented the words we use every day. We skate on the surface of stolen symbols—unaware of all the literature, letters, gossip, slang, jokes, all the lived-life that got folded into each syllable. Unaware of all the iterative cycles through tribes and trade these words passed through to get polished into their current form. \n\n'Word travels fast.' Fast test runs. Fast mutations. \n\nNow AI is forcing this same process onto images, sound, code, identity, all media, myth, and memes—they're all becoming liquid like words. And it hurts. Because those expressions took a lot of effort to build at those first layers of creative connection. And it's unfair and sad to see an artist's career get compressed into a data paintbrush. There's no moral defense of it at the individual level. Just as there's no realistic defense against it at the global level. \n\nCall it creative destruction, cultural ratcheting, or collaborative tech. From hand-craft to idea-craft, we're climbing up the layers of abstraction, a massive network rising to task: a great translation. \n\nAs an amoral force of nature, information simply wants freedom. Like a plant outgrowing it's pot, our stories push past the edges. And as the current informational containers, we can still shape it, even if we can't stop its directional flow: \n\nonward, outward, upward.";
+
+        const WORDS = TEXT.split(/\s+/);
+
+        function resizeCanvas() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+
+        function getColorFromPosition(x, y) {
+            const hue = 180 + (x / width) * 90;
+            const lightness = 30 + (y / height) * 40;
+            return `hsl(${hue}, 100%, ${lightness}%)`;
+        }
+
+        class Shape {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.x = Math.random() * width;
+                this.y = height + 20;
+                this.size = Math.random() * 15 + 15;
+                this.speed = Math.random() * 0.5 + 0.9;
+                this.color = MUTED_GREEN_COLORS[Math.floor(Math.random() * MUTED_GREEN_COLORS.length)];
+                this.rotation = 0;
+                this.rotationSpeed = (Math.random() * 0.02 + 0.005) * (Math.random() < 0.5 ? 1 : -1);
+                this.type = SHAPE_TYPES[Math.floor(Math.random() * SHAPE_TYPES.length)];
+            }
+
+            update() {
+                this.y -= this.speed;
+                this.rotation += this.rotationSpeed;
+
+                if (this.y < -20) {
+                    this.reset();
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                ctx.fillStyle = this.color;
+                ctx.strokeStyle = 'rgba(221, 161, 94, 0.8)';
+                ctx.lineWidth = 1;
+
+                switch(this.type) {
+                    case 'circle':
+                        ctx.beginPath();
+                        ctx.arc(0, 0, this.size / 2, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+                        break;
+                    case 'square':
+                        ctx.fillRect(-this.size / 2, -this.size / 2, this.size, this.size);
+                        ctx.strokeRect(-this.size / 2, -this.size / 2, this.size, this.size);
+                        break;
+                    case 'triangle':
+                        ctx.beginPath();
+                        ctx.moveTo(0, -this.size / 2);
+                        ctx.lineTo(-this.size / 2, this.size / 2);
+                        ctx.lineTo(this.size / 2, this.size / 2);
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.stroke();
+                        break;
+                    case 'pentagon':
+                        this.drawPolygon(5, this.size / 2);
+                        break;
+                    case 'hexagon':
+                        this.drawPolygon(6, this.size / 2);
+                        break;
+                }
+
+                ctx.restore();
+            }
+
+            drawPolygon(sides, radius) {
+                ctx.beginPath();
+                for (let i = 0; i < sides; i++) {
+                    const angle = (i / sides) * Math.PI * 2;
+                    const x = Math.cos(angle) * radius;
+                    const y = Math.sin(angle) * radius;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+            }
+        }
+
+        class Ripple {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.radius = 0.9;
+                this.maxRadius = Math.max(width, height) * 0.3;
+                this.speed = 3;
+                this.opacity = 0.9;
+                this.color = getColorFromPosition(x, y);
+                this.lineCount = 10;
+                this.controlPoints = 32;
+                this.distortions = Array(this.controlPoints).fill().map(() => ({
+                    angle: Math.random() * Math.PI * 2,
+                    magnitude: Math.random() * 0.05 + 0.02
+                }));
+            }
+
+            update() {
+                this.radius += this.speed;
+                this.opacity = 1 - (this.radius / this.maxRadius);
+                return this.radius <= this.maxRadius;
+            }
+
+            draw() {
+                for (let i = 0; i < this.lineCount; i++) {
+                    const radius = this.radius - (i * this.speed);
+                    if (radius > 0) {
+                        ctx.beginPath();
+                        
+                        const distortionFactor = Math.min(1, (radius / this.maxRadius) * 2);
+                        
+                        for (let j = 0; j <= this.controlPoints; j++) {
+                            const angle = (j / this.controlPoints) * Math.PI * 2;
+                            const distortionIndex = j % this.controlPoints;
+                            const distortion = this.distortions[distortionIndex];
+                            
+                            const distortedRadius = radius * (1 + distortion.magnitude * distortionFactor * Math.sin(angle + distortion.angle));
+                            
+                            const x = this.x + Math.cos(angle) * distortedRadius;
+                            const y = this.y + Math.sin(angle) * distortedRadius;
+
+                            if (j === 0) {
+                                ctx.moveTo(x, y);
+                            } else {
+                                ctx.lineTo(x, y);
+                            }
+                        }
+
+                        ctx.closePath();
+                        ctx.strokeStyle = this.color.replace(')', `, ${this.opacity * (1 - i/this.lineCount)})`).replace('hsl', 'hsla');
+                        ctx.lineWidth = 1;
+                        ctx.stroke();
+                    }
+                }
+            }
+        }
+
+        class Explosion {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.particles = [];
+                for (let i = 0; i < 10; i++) {
+                    this.particles.push({
+                        x: 0,
+                        y: 0,
+                        speed: Math.random() * 3 + 2,
+                        angle: Math.random() * Math.PI * 2,
+                        size: Math.random() * 3 + 5,
+                        life: 1
+                    });
+                }
+            }
+
+            update() {
+                this.particles.forEach(p => {
+                    p.x += Math.cos(p.angle) * p.speed;
+                    p.y += Math.sin(p.angle) * p.speed;
+                    p.life -= 0.03;
+                    p.size *= 0.95;
+                });
+                this.particles = this.particles.filter(p => p.life > 0);
+                return this.particles.length > 0;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                this.particles.forEach(p => {
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    ctx.fillStyle = this.color.replace(')', `, ${p.life * 0.7})`).replace('rgb', 'rgba');
+                    ctx.fill();
+                });
+                ctx.restore();
+            }
+        }
+
+        function updateText() {
+            let revealedCharCount = Math.floor(destroyedCount / 3);
+            let revealedText = TEXT.slice(0, revealedCharCount);
+            textContent.innerHTML = revealedText + '<span class="cursor"></span>';
+            
+            // Smoothly adjust the text container height
+            requestAnimationFrame(() => {
+                const textContainerHeight = textContent.offsetHeight;
+                textContainer.style.height = `${textContainerHeight}px`;
+            });
+
+            // Scroll to bottom if near the bottom
+            const scrollPosition = window.pageYOffset;
+            const windowHeight = window.innerHeight;
+            const fullHeight = document.documentElement.scrollHeight;
+            
+            if (fullHeight - (scrollPosition + windowHeight) < 100) {
+                window.scrollTo({
+                    top: fullHeight,
+                    behavior: 'smooth'
+                });
+            }
+        }
+
+        function init() {
+            resizeCanvas();
+            for (let i = 0; i < SHAPE_COUNT; i++) {
+                shapes.push(new Shape());
+            }
+            window.addEventListener('resize', () => {
+                resizeCanvas();
+                updateText(); // Readjust text container on resize
+            });
+            
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.nav-arrows')) {
+                    ripples.push(new Ripple(e.clientX, e.clientY));
+                }
+            });
+
+            animate();
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, width, height);
+
+            ctx.globalAlpha = 0.8; // Adjust this value between 0 and 1 to change transparency
+
+            shapes.forEach((shape, index) => {
+                shape.update();
+                shape.draw();
+
+                ripples.forEach(r => {
+                    const dx = shape.x - r.x;
+                    const dy = shape.y - r.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance <= r.radius && distance >= r.radius - r.speed) {
+                        explosions.push(new Explosion(shape.x, shape.y, shape.color));
+                        shapes[index] = new Shape();
+                        destroyedCount++;
+                        updateText();
+                    }
+                });
+            });
+
+            ripples = ripples.filter(r => {
+                r.draw();
+                return r.update();
+            });
+
+            explosions = explosions.filter(e => {
+                e.draw();
+                return e.update();
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        init();
+    </script>
+</body>
+</html>

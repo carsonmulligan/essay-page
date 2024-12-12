@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Floating Circles with Adjusted Sizes and Padding</title>
+    <style>
+        body { margin: 0; overflow: visible; background-color: #f0f0f0; font-size: 16px; min-height: 100vh }
+        canvas { display: block; position: fixed; top: 0; left: 0; z-index: 1; }
+        #controls { position: absolute; top: 60px; left: 10px; background: rgba(255,255,255,0.7); padding: 10px; z-index: 10; display: none; }
+        #layout-container {
+            position: relative;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 5;
+            pointer-events: none;
+            padding-top: 60px;
+        }
+        #window-circle {
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 8rem;
+            height: 8rem;
+            border-radius: 50%;
+            overflow: hidden;
+            pointer-events: none;
+            padding: 0.5rem;
+            background-color: rgba(255, 255, 255, 0.2);
+            z-index: 2;  /* Ensure it's above the canvas but below other elements */
+        }
+        #overlay {
+            width: 90%;
+            max-width: 600px;
+            height: 100%;
+            margin-top: 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            pointer-events: auto;
+            padding: 1rem;
+        }
+        #overlay iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            border-radius: 10px;
+        }
+        nav {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 3;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background-color: rgba(255, 255, 255, 0.5);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+        }
+        #topImage {
+            height: 2rem;
+            width: auto;
+        }
+        .nav-arrows {
+            display: flex;
+            gap: 1rem;
+        }
+        .nav-arrow {
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            user-select: none;
+            transition: transform 0.2s ease;
+        }
+        .nav-arrow:hover {
+        transform: scale(1.1);
+        }
+        .nav-arrow:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <nav>
+        <a href="https://linktr.ee/late_arrivals" target="_blank">
+            <img id="topImage" src="images/logo-horizontal-black-clear.png" alt="Late Arrivals">
+        </a>
+        <div class="nav-arrows">
+            <img src="images/arrow-left.svg" alt="Previous" class="nav-arrow" id="prevApp">
+            <img src="images/arrow-right.svg" alt="Next" class="nav-arrow" id="nextApp">
+        </div>
+    </nav>
+    <div id="controls">
+        <label>Blend Mode: 
+            <select id="blendMode">
+                <option value="source-over">Normal</option>
+                <option value="screen">Screen</option>
+                <option value="multiply">Multiply</option>
+                <option value="overlay">Overlay</option>
+                <option value="difference">Difference</option>
+            </select>
+        </label>
+        <br>
+        <label>Opacity: <input type="range" id="opacity" min="0" max="1" step="0.1" value="0.7"></label>
+    
+    </div>
+            <div id="layout-container">
+                <div id="window-circle"></div>
+                <div id="overlay">
+                    <script src="https://embed.pickaxeproject.com/axe/scripts/pickaxe-parent.js"></script>
+                    <iframe id=YZIESOCTXJ loading="eager" src="https://embed.pickaxeproject.com/axe?id=Synesthesia_IPLCU&mode=embed_gold&host=beta&theme=custom&opacity=50&image=hide&title=hide&description=hide&font_header=Space+Grotesk&size_header=12&font_body=Space+Grotesk&size_body=14&font_labels=Space+Grotesk&size_labels=12&font_button=Space+Grotesk&size_button=14&c_fb=F1F3F4&c_ff=FFFFFF&c_fbd=030303&c_rb=FFFFFF&c_bb=EF476F&c_bt=000000&c_t=000000&s_ffo=50&s_rbo=0&s_bbo=100&s_f=minimalist&s_b=outline&s_t=2&s_to=0&s_r=8&height=auto&minH=500" width="100%" height="100%"  style="border:0px solid rgba(0, 0, 0, 0.5);transition:.3s;border-radius:5px;max-height:100%" frameBorder="0"></iframe>
+                    <script>
+                        iFrameResize({heightCalculationMethod:'taggedElement', minHeight: '500px' }, '#YZIESOCTXJ')
+                    </script>
+                </div>
+        
+    </div>
+    
+    <script>
+        // App cycling functionality
+        const apps = [
+            { name: 'index', path: './index.html' },
+            { name: 'circle scatter', path: './circle-scatter.html' },
+            // Add more apps here as needed
+        ];
+    
+        let currentAppIndex = 0;
+    
+        function updateApp(direction) {
+            currentAppIndex = (currentAppIndex + direction + apps.length) % apps.length;
+            const nextApp = apps[currentAppIndex];
+            
+            // Save any necessary state here
+            const state = {
+                blendMode: document.getElementById('blendMode').value,
+                opacity: document.getElementById('opacity').value
+            };
+            localStorage.setItem('appState', JSON.stringify(state));
+            
+            // Navigate to the next app
+            window.location.href = nextApp.path;
+        }
+    
+        document.getElementById('prevApp').addEventListener('click', () => updateApp(-1));
+        document.getElementById('nextApp').addEventListener('click', () => updateApp(1));
+    
+        // Determine current app and set currentAppIndex
+        const currentPath = window.location.pathname.split('/').pop() || 'circle-scatter.html';
+        currentAppIndex = apps.findIndex(app => app.path.includes(currentPath));
+        if (currentAppIndex === -1) currentAppIndex = 0;
+    
+        // Circle animation and related functionality
+        (function() {
+            console.log('Script initialization started');
+
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            const blendModeSelect = document.getElementById('blendMode');
+            const opacityInput = document.getElementById('opacity');
+            const windowCircle = document.getElementById('window-circle');
+
+            if (!blendModeSelect || !opacityInput || !windowCircle) {
+            console.error('One or more required elements not found');
+            return;
+             }
+
+            console.log('All required elements found');
+    
+            const iframe = document.getElementById('YZIESOCTXJ');
+            let iframeResizing = false;
+            let resizeTimeout;
+            const resizeDelay = 500; // Adjust this value as needed
+    
+            // New state variable
+            let animationState = 'normal'; // Possible states: 'normal', 'returning', 'explosive'
+    
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+                        if (!iframeResizing) {
+                            iframeResizing = true;
+                            console.log('Iframe started resizing');
+                            if (animationState === 'normal') {
+                                initiateReturn();
+                            }
+                        }
+    
+                        clearTimeout(resizeTimeout);
+    
+                        resizeTimeout = setTimeout(() => {
+                            iframeResizing = false;
+                            console.log('Iframe finished resizing');
+                            if (animationState === 'returning') {
+                                initiateExplosiveRelease();
+                            }
+                        }, resizeDelay);
+                    }
+                });
+            });
+    
+            observer.observe(iframe, {
+                attributes: true,
+                attributeFilter: ['style']
+            });
+    
+            function resizeCanvas() {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+            }
+            resizeCanvas();
+    
+            function remToPx(rem) {
+                return rem * parseFloat(getComputedStyle(document.documentElement).fontSize);
+            }
+    
+            const circleDiameter = 8; // Changed to 8 rems
+            const circleRadius = remToPx(circleDiameter) / 2;
+    
+            const frictionFactor = 0.995;
+            const minSpeed = 0.5;
+            const maxSpeed = 10;
+            const returnDuration = 1000;
+            const explosiveSpeed = 30;
+    
+            function hexToRgb(hex) {
+                const r = parseInt(hex.slice(1, 3), 16);
+                const g = parseInt(hex.slice(3, 5), 16);
+                const b = parseInt(hex.slice(5, 7), 16);
+                return [r, g, b];
+            }
+    
+            function updateWindowCirclePosition() {
+                const rect = windowCircle.getBoundingClientRect();
+                return {
+                    x: rect.left + rect.width / 2,
+                    y: rect.top + rect.height / 2,
+                    radius: rect.width / 2
+                };
+            }
+    
+            let windowCirclePos = updateWindowCirclePosition();
+    
+            const circles = [
+                { x: canvas.width * 0.2, y: canvas.height * 0.2, radius: circleRadius, color: hexToRgb('#ef476f'), vx: 6, vy: 5 },
+                { x: canvas.width * 0.4, y: canvas.height * 0.4, radius: circleRadius, color: hexToRgb('#ffd166'), vx: -5, vy: 6 },
+                { x: canvas.width * 0.6, y: canvas.height * 0.6, radius: circleRadius, color: hexToRgb('#06d6a0'), vx: -4, vy: -5.5 },
+                { x: canvas.width * 0.8, y: canvas.height * 0.8, radius: circleRadius, color: hexToRgb('#118ab2'), vx: 3, vy: -4 },
+                { x: canvas.width * 0.5, y: canvas.height * 0.5, radius: circleRadius, color: hexToRgb('#073b4c'), vx: -2, vy: 3 },
+            ];
+    
+            let isReturning = false;
+            let returnStartTime;
+    
+            const gifUrls = [
+                './images/cloud cutouts.png',
+                './images/cloud faces.png',
+            ];
+    
+            let currentGifIndex = 0;
+             const cloudGif = new Image();
+             cloudGif.onload = () => {
+            console.log('Cloud GIF loaded successfully');
+            animate();
+             };
+             cloudGif.onerror = (e) => {
+            console.error('Error loading cloud GIF:', e);
+             };
+             cloudGif.src = gifUrls[currentGifIndex];
+    
+            function shuffleGif() {
+                currentGifIndex = (currentGifIndex + 1) % gifUrls.length;
+                cloudGif.src = gifUrls[currentGifIndex];
+            }
+    
+            function applyFriction(circle) {
+                let speed = Math.sqrt(circle.vx * circle.vx + circle.vy * circle.vy);
+                if (speed > minSpeed) {
+                    circle.vx *= frictionFactor;
+                    circle.vy *= frictionFactor;
+                } else {
+                    let angle = Math.atan2(circle.vy, circle.vx);
+                    circle.vx = minSpeed * Math.cos(angle);
+                    circle.vy = minSpeed * Math.sin(angle);
+                }
+            }
+    
+            function distanceToCenter(circle) {
+                const dx = windowCirclePos.x - circle.x;
+                const dy = windowCirclePos.y - circle.y;
+                return Math.sqrt(dx * dx + dy * dy);
+            }
+    
+            function initiateReturn() {
+                animationState = 'returning';
+                isReturning = true;
+                returnStartTime = Date.now();
+                windowCirclePos = updateWindowCirclePosition();
+                circles.forEach(circle => {
+                    circle.startX = circle.x;
+                    circle.startY = circle.y;
+                    circle.distance = distanceToCenter(circle);
+                });
+            }
+    
+            function updateReturnMotion(circle) {
+                const elapsedTime = Date.now() - returnStartTime;
+                const progress = Math.min(elapsedTime / returnDuration, 1);
+                
+                const easeProgress = 1 - Math.pow(1 - progress, 3);
+                
+                const dx = windowCirclePos.x - circle.startX;
+                const dy = windowCirclePos.y - circle.startY;
+                
+                circle.x = circle.startX + dx * easeProgress;
+                circle.y = circle.startY + dy * easeProgress;
+    
+                if (progress === 1 && circle === circles[0]) {
+                    isReturning = false;
+                    initiateExplosiveRelease();
+                    shuffleGif();
+                }
+            }
+    
+            function initiateExplosiveRelease() {
+                animationState = 'explosive';
+                windowCirclePos = updateWindowCirclePosition();
+                circles.forEach(circle => {
+                    const dx = circle.x - windowCirclePos.x;
+                    const dy = circle.y - windowCirclePos.y;
+                    const angle = Math.atan2(dy, dx);
+                    circle.vx = Math.cos(angle) * explosiveSpeed;
+                    circle.vy = Math.sin(angle) * explosiveSpeed;
+                });
+                
+                // Set a timeout to return to normal state after explosion
+                setTimeout(() => {
+                    animationState = 'normal';
+                }, 2000); // Adjust this time as needed
+            }
+    
+            function drawWindowCircle() {
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(windowCirclePos.x, windowCirclePos.y, windowCirclePos.radius - remToPx(0.5), 0, Math.PI * 2);
+                ctx.clip();
+                ctx.fillStyle = `rgb(135, 206, 235)`;
+                ctx.fillRect(windowCirclePos.x - windowCirclePos.radius, windowCirclePos.y - windowCirclePos.radius, windowCirclePos.radius * 2, windowCirclePos.radius * 2);
+                ctx.drawImage(cloudGif, windowCirclePos.x - windowCirclePos.radius, windowCirclePos.y - windowCirclePos.radius, windowCirclePos.radius * 2, windowCirclePos.radius * 2);
+                ctx.restore();
+                ctx.beginPath();
+                ctx.arc(windowCirclePos.x, windowCirclePos.y, windowCirclePos.radius - remToPx(0.5), 0, Math.PI * 2);
+                ctx.strokeStyle = `rgb(135, 206, 235)`;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+    
+            function animate() {
+                console.log('Animation frame');
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                drawWindowCircle();
+    
+                ctx.globalCompositeOperation = blendModeSelect.value;
+                const opacity = opacityInput.value;
+    
+                circles.forEach(circle => {
+                    if (isReturning) {
+                        updateReturnMotion(circle);
+                    } else {
+                        applyFriction(circle);
+                        circle.x += circle.vx;
+                        circle.y += circle.vy;
+    
+                        if (circle.x + circle.radius > canvas.width || circle.x - circle.radius < 0) {
+                            circle.vx *= -1;
+                        }
+                        if (circle.y + circle.radius > canvas.height || circle.y - circle.radius < 0) {
+                            circle.vy *= -1;
+                        }
+                    }
+    
+                    ctx.beginPath();
+                    ctx.arc(circle.x, circle.y, circle.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(${circle.color[0]}, ${circle.color[1]}, ${circle.color[2]}, ${opacity})`;
+                    ctx.fill();
+                });
+    
+                requestAnimationFrame(animate);
+            }
+    
+            // Load saved state if any
+            window.addEventListener('load', () => {
+                console.log('Window loaded');
+
+                const savedState = localStorage.getItem('appState');
+                if (savedState) {
+                    const state = JSON.parse(savedState);
+                    if (state.blendMode) blendModeSelect.value = state.blendMode;
+                    if (state.opacity) opacityInput.value = state.opacity;
+                    // Trigger any necessary updates based on these values
+                }
+            });
+    
+            cloudGif.onload = animate;
+    
+            canvas.addEventListener('click', (event) => {
+                console.log('Canvas clicked');
+                if (!isReturning) {
+                    initiateReturn();
+                }
+            });
+    
+            window.addEventListener('resize', () => {
+                console.log('Window resized');
+                resizeCanvas();
+                windowCirclePos = updateWindowCirclePosition();
+                const newRadius = remToPx(circleDiameter) / 2;
+                circles.forEach(circle => {
+                    circle.radius = newRadius;
+                });
+            });
+    
+            console.log('Animation script loaded and running');
+        })();
+    </script>
+</body>
+</html>

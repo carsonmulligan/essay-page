@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Floating Circles with Faster Return</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #f0f0f0; }
+        canvas { display: block; }
+        #controls { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,0.7); padding: 10px; }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div id="controls">
+        <label>Blend Mode: 
+            <select id="blendMode">
+                <option value="source-over">Normal</option>
+                <option value="screen">Screen</option>
+                <option value="multiply">Multiply</option>
+                <option value="overlay">Overlay</option>
+                <option value="difference">Difference</option>
+            </select>
+        </label>
+        <br>
+        <label>Opacity: <input type="range" id="opacity" min="0" max="1" step="0.1" value="0.7"></label>
+    </div>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const blendModeSelect = document.getElementById('blendMode');
+        const opacityInput = document.getElementById('opacity');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const circleRadius = 150;
+        const frictionFactor = 0.995;
+        const minSpeed = 5;
+        const maxSpeed = 10;
+        const returnDuration = 1000; // Reduced from 2000 to 1000 for faster return
+        const explosiveSpeed = 20;
+
+        const circles = [
+            { x: canvas.width / 4, y: canvas.height / 4, radius: circleRadius, color: [255, 0, 0], vx: 6, vy: 5 },
+            { x: 3 * canvas.width / 4, y: canvas.height / 4, radius: circleRadius, color: [0, 255, 0], vx: -5, vy: 6 },
+            { x: canvas.width / 2, y: 3 * canvas.height / 4, radius: circleRadius, color: [0, 0, 255], vx: -4, vy: -5.5 },
+            { x: canvas.width / 2, y: canvas.height / 2, radius: circleRadius, color: [135, 206, 235], vx: 0, vy: 0 }
+        ];
+
+        let isReturning = false;
+        let returnStartTime;
+
+        const cloudGif = new Image();
+        cloudGif.src = '/api/placeholder/300/300';
+
+        function applyFriction(circle) {
+            let speed = Math.sqrt(circle.vx * circle.vx + circle.vy * circle.vy);
+            if (speed > minSpeed) {
+                circle.vx *= frictionFactor;
+                circle.vy *= frictionFactor;
+            } else {
+                let angle = Math.atan2(circle.vy, circle.vx);
+                circle.vx = minSpeed * Math.cos(angle);
+                circle.vy = minSpeed * Math.sin(angle);
+            }
+        }
+
+        function distanceToCenter(circle) {
+            const dx = circles[3].x - circle.x;
+            const dy = circles[3].y - circle.y;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        function initiateReturn() {
+            isReturning = true;
+            returnStartTime = Date.now();
+            circles.slice(0, 3).forEach(circle => {
+                circle.startX = circle.x;
+                circle.startY = circle.y;
+                circle.distance = distanceToCenter(circle);
+            });
+        }
+
+        function updateReturnMotion(circle) {
+            const elapsedTime = Date.now() - returnStartTime;
+            const progress = Math.min(elapsedTime / returnDuration, 1);
+            
+            const easeProgress = 1 - Math.pow(1 - progress, 3);
+            
+            const dx = circles[3].x - circle.startX;
+            const dy = circles[3].y - circle.startY;
+            
+            circle.x = circle.startX + dx * easeProgress;
+            circle.y = circle.startY + dy * easeProgress;
+
+            if (progress === 1) {
+                isReturning = false;
+                const angle = Math.random() * Math.PI * 2;
+                circle.vx = Math.cos(angle) * explosiveSpeed;
+                circle.vy = Math.sin(angle) * explosiveSpeed;
+            }
+        }
+
+        function drawSkyCircle() {
+            const skyCircle = circles[3];
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(skyCircle.x, skyCircle.y, skyCircle.radius, 0, Math.PI * 2);
+            ctx.clip();
+            ctx.fillStyle = `rgb(${skyCircle.color[0]}, ${skyCircle.color[1]}, ${skyCircle.color[2]})`;
+            ctx.fillRect(skyCircle.x - skyCircle.radius, skyCircle.y - skyCircle.radius, skyCircle.radius * 2, skyCircle.radius * 2);
+            ctx.drawImage(cloudGif, skyCircle.x - skyCircle.radius, skyCircle.y - skyCircle.radius, skyCircle.radius * 2, skyCircle.radius * 2);
+            ctx.restore();
+            ctx.beginPath();
+            ctx.arc(skyCircle.x, skyCircle.y, skyCircle.radius, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgb(${skyCircle.color[0]}, ${skyCircle.color[1]}, ${skyCircle.color[2]})`;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawSkyCircle();
+
+            ctx.globalCompositeOperation = blendModeSelect.value;
+            const opacity = opacityInput.value;
+
+            circles.slice(0, 3).forEach(circle => {
+                if (isReturning) {
+                    updateReturnMotion(circle);
+                } else {
+                    applyFriction(circle);
+                    circle.x += circle.vx;
+                    circle.y += circle.vy;
+
+                    if (circle.x + circle.radius > canvas.width || circle.x - circle.radius < 0) {
+                        circle.vx *= -1;
+                    }
+                    if (circle.y + circle.radius > canvas.height || circle.y - circle.radius < 0) {
+                        circle.vy *= -1;
+                    }
+                }
+
+                ctx.beginPath();
+                ctx.arc(circle.x, circle.y, circle.radius, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(${circle.color[0]}, ${circle.color[1]}, ${circle.color[2]}, ${opacity})`;
+                ctx.fill();
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        cloudGif.onload = animate;
+
+        canvas.addEventListener('click', () => {
+            if (!isReturning) {
+                initiateReturn();
+            }
+        });
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            circles[3].x = canvas.width / 2;
+            circles[3].y = canvas.height / 2;
+        });
+    </script>
+</body>
+</html>
